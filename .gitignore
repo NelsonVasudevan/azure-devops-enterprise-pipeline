@@ -1,0 +1,17 @@
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
+terraform/*.tfplan
+crash.log
+crash.*.log
+
+# Azure / secrets
+*.pem
+*.key
+.env
+
+# OS
+.DS_Store
