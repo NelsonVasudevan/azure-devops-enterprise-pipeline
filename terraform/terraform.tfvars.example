@@ -1,0 +1,11 @@
+# Copy this file to terraform.tfvars and fill in your real values.
+# terraform.tfvars is gitignored - never commit it.
+
+subscription_id = "00000000-0000-0000-0000-000000000000"
+location        = "centralindia"
+alert_email     = "you@example.com"
+
+# Optional overrides (defaults shown):
+# node_count   = 1
+# node_vm_size = "Standard_B2s"
+# budget_amount = 5

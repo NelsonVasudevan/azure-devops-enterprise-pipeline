@@ -1,0 +1,157 @@
+# azure-pipelines.yml
+#
+# Pipeline stages:
+#   1. Validate   - terraform fmt/validate + lint app code
+#   2. Plan        - terraform plan, published as an artifact for review
+#   3. Apply       - terraform apply (manual approval gate via environment)
+#   4. Build&Push  - docker build, push image to Docker Hub
+#   5. Deploy      - kubectl/helm deploy to AKS, using the cluster Terraform just provisioned
+#
+# Required pipeline setup (do this in Azure DevOps UI, not in code):
+#   - Service connection "azure-subscription-connection" (Service Principal,
+#     see terraform/main.tf comment for the az ad sp create-for-rbac command)
+#   - Service connection "dockerhub-connection" (Docker Hub username/PAT)
+#   - Variable group or secret variables: DOCKERHUB_NAMESPACE
+#   - Environment "aks-production" with a manual approval check, so
+#     terraform apply never runs unattended against your subscription
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: "ubuntu-latest"
+
+variables:
+  terraformWorkingDir: "$(System.DefaultWorkingDirectory)/terraform"
+  imageRepository: "$(DOCKERHUB_NAMESPACE)/adep-app"
+  dockerfilePath: "$(System.DefaultWorkingDirectory)/app/Dockerfile"
+  tag: "$(Build.BuildId)"
+
+stages:
+  # ---------------------------------------------------------------
+  - stage: Validate
+    displayName: "Validate"
+    jobs:
+      - job: TerraformValidate
+        displayName: "Terraform fmt & validate"
+        steps:
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: "1.7.5"
+
+          - script: |
+              terraform fmt -check -recursive
+              terraform init -backend=false
+              terraform validate
+            workingDirectory: $(terraformWorkingDir)
+            displayName: "terraform fmt / init / validate"
+
+  # ---------------------------------------------------------------
+  - stage: Plan
+    displayName: "Terraform Plan"
+    dependsOn: Validate
+    jobs:
+      - job: TerraformPlan
+        displayName: "terraform plan"
+        steps:
+          - task: TerraformInstaller@1
+            inputs:
+              terraformVersion: "1.7.5"
+
+          - task: AzureCLI@2
+            displayName: "terraform init & plan"
+            inputs:
+              azureSubscription: "azure-subscription-connection"
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                cd $(terraformWorkingDir)
+                terraform init
+                terraform plan -out=tfplan \
+                  -var="subscription_id=$(az account show --query id -o tsv)" \
+                  -var="alert_email=$(ALERT_EMAIL)"
+
+          - publish: $(terraformWorkingDir)/tfplan
+            artifact: tfplan
+
+  # ---------------------------------------------------------------
+  - stage: Apply
+    displayName: "Terraform Apply"
+    dependsOn: Plan
+    jobs:
+      - deployment: TerraformApply
+        displayName: "terraform apply (manual approval)"
+        environment: "aks-production" # manual approval check lives here
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: TerraformInstaller@1
+                  inputs:
+                    terraformVersion: "1.7.5"
+
+                - download: current
+                  artifact: tfplan
+
+                - task: AzureCLI@2
+                  displayName: "terraform init & apply"
+                  inputs:
+                    azureSubscription: "azure-subscription-connection"
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      cd $(terraformWorkingDir)
+                      terraform init
+                      terraform apply -auto-approve $(Pipeline.Workspace)/tfplan/tfplan
+
+  # ---------------------------------------------------------------
+  - stage: BuildAndPush
+    displayName: "Build & Push Image"
+    dependsOn: Apply
+    jobs:
+      - job: DockerBuildPush
+        displayName: "docker build & push to Docker Hub"
+        steps:
+          - task: Docker@2
+            displayName: "Build and push"
+            inputs:
+              containerRegistry: "dockerhub-connection"
+              repository: $(imageRepository)
+              command: buildAndPush
+              Dockerfile: $(dockerfilePath)
+              tags: |
+                $(tag)
+                latest
+
+  # ---------------------------------------------------------------
+  - stage: Deploy
+    displayName: "Deploy to AKS"
+    dependsOn: BuildAndPush
+    jobs:
+      - deployment: DeployToAKS
+        displayName: "kubectl apply to AKS"
+        environment: "aks-production"
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: "Get AKS credentials"
+                  inputs:
+                    azureSubscription: "azure-subscription-connection"
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      az aks get-credentials \
+                        --resource-group rg-azure-devops-pipeline \
+                        --name adep-aks \
+                        --overwrite-existing
+
+                - script: |
+                    kubectl set image deployment/adep-app \
+                      adep-app=$(imageRepository):$(tag) \
+                      --record || kubectl apply -f k8s/deployment.yaml
+                    kubectl rollout status deployment/adep-app --timeout=120s
+                  displayName: "Rolling update on AKS"

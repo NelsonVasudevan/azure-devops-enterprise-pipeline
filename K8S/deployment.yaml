@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: adep-app
+  labels:
+    app: adep-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: adep-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: adep-app
+    spec:
+      containers:
+        - name: adep-app
+          image: DOCKERHUB_NAMESPACE/adep-app:latest # overwritten by pipeline's kubectl set image
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: adep-app
+spec:
+  type: LoadBalancer
+  selector:
+    app: adep-app
+  ports:
+    - port: 80
+      targetPort: 8000
