@@ -13,12 +13,12 @@ terraform {
   # (storage account + container) once you've proven the pipeline works.
   # Uncomment and fill in after creating the storage account manually:
   #
-  # backend "azurerm" {
-  #   resource_group_name  = "tfstate-rg"
-  #   storage_account_name = "tfstateXXXXX"
-  #   container_name       = "tfstate"
-  #   key                  = "aks.terraform.tfstate"
-  # }
+backend "azurerm" {
+     resource_group_name  = "tfstate-rg"
+     storage_account_name = "tfstateadeptask"     
+     container_name       = "tfstate-task"
+     key                  = "aks.terraform.tfstate"
+   }
 }
 
 provider "azurerm" {
