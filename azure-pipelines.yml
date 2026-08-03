@@ -81,11 +81,8 @@ stages:
                   -backend-config="subscription_id=$ARM_SUBSCRIPTION_ID" \
                   -backend-config="use_cli=false"
                 terraform plan -out=tfplan \
-<<<<<<< HEAD
-                  -var="subscription_id=$(az account show --query id -o tsv)" \
-=======
+
                   -var="subscription_id=$ARM_SUBSCRIPTION_ID" \
->>>>>>> cfbaa4c (edited backedn file)
                   -var="alert_email=$ALERT_EMAIL"
             env:
               ALERT_EMAIL: $(ALERT_EMAIL)
