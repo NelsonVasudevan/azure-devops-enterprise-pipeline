@@ -59,6 +59,12 @@ stages:
           - task: TerraformInstaller@1
             inputs:
               terraformVersion: "1.7.5"
+          
+          - download: current
+            artifact: tfplan
+
+          - script: ls -R $(System.DefaultWorkingDirectory)
+            displayName: "Debug repo structure"
 
           - task: AzureCLI@2
             displayName: "terraform init & plan"
