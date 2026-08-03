@@ -37,6 +37,7 @@ stages:
       - job: TerraformValidate
         displayName: "Terraform fmt & validate"
         steps:
+          - checkout: self 
           - task: TerraformInstaller@1
             inputs:
               terraformVersion: "1.7.5"
@@ -56,6 +57,7 @@ stages:
       - job: TerraformPlan
         displayName: "terraform plan"
         steps:
+          - checkout: self 
           - task: TerraformInstaller@1
             inputs:
               terraformVersion: "1.7.5"
@@ -99,6 +101,7 @@ stages:
           runOnce:
             deploy:
               steps:
+                - checkout: self
                 - task: TerraformInstaller@1
                   inputs:
                     terraformVersion: "1.7.5"
@@ -134,6 +137,7 @@ stages:
       - job: DockerBuildPush
         displayName: "docker build & push to Docker Hub"
         steps:
+          - checkout: self
           - task: Docker@2
             displayName: "Build and push"
             inputs:
@@ -157,6 +161,7 @@ stages:
           runOnce:
             deploy:
               steps:
+                - checkout: self
                 - task: AzureCLI@2
                   displayName: "Get AKS credentials"
                   inputs:
