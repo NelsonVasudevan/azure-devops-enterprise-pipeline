@@ -24,7 +24,7 @@ pool:
   vmImage: "ubuntu-latest"
 
 variables:
-  terraformWorkingDir: "$(System.DefaultWorkingDirectory)/terraform"
+  terraformWorkingDir: "$(System.DefaultWorkingDirectory)/azure-devops-enterprise-pipeline/terraform"
   imageRepository: "$(DOCKERHUB_NAMESPACE)/adep-app"
   dockerfilePath: "$(System.DefaultWorkingDirectory)/app/Dockerfile"
   tag: "$(Build.BuildId)"
