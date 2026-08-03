@@ -71,7 +71,9 @@ stages:
                 terraform init
                 terraform plan -out=tfplan \
                   -var="subscription_id=$(az account show --query id -o tsv)" \
-                  -var="alert_email=$(ALERT_EMAIL)"
+                  -var="alert_email=$ALERT_EMAIL"
+            env:
+              ALERT_EMAIL: $(ALERT_EMAIL)
 
           - publish: $(terraformWorkingDir)/tfplan
             artifact: tfplan
@@ -150,8 +152,10 @@ stages:
                         --overwrite-existing
 
                 - script: |
+                    kubectl apply -f k8s/postgres.yaml
                     kubectl set image deployment/adep-app \
                       adep-app=$(imageRepository):$(tag) \
                       --record || kubectl apply -f k8s/deployment.yaml
+                    kubectl rollout status deployment/postgres --timeout=120s
                     kubectl rollout status deployment/adep-app --timeout=120s
                   displayName: "Rolling update on AKS"
