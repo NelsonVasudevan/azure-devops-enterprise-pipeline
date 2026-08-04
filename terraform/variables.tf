@@ -44,7 +44,7 @@ variable "node_count" {
 variable "node_vm_size" {
   description = "VM size for AKS nodes. B2s is the cheapest burstable size that can actually run a real workload."
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_B2ps_v2"
 }
 
 variable "sku_tier" {
