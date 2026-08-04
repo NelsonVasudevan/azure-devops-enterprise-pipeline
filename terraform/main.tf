@@ -46,13 +46,12 @@ resource "azurerm_kubernetes_cluster" "main" {
       max_surge = "10%"
     }
   }
+  oidc_issuer_enabled = true
 
-  # System-assigned managed identity - no need to hand-manage a
-  # Service Principal's client secret rotation for the cluster itself.
   identity {
     type = "SystemAssigned"
   }
-
+}
   network_profile {
     network_plugin = "azure"
     network_policy = "azure"
