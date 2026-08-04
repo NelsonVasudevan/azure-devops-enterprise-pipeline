@@ -70,8 +70,8 @@ variable "tags" {
   description = "Common tags applied to all resources"
   type        = map(string)
   default = {
-    project     = "azure-devops-enterprise-pipeline"
-    managed_by  = "terraform"
-    purpose     = "portfolio"
+    project    = "azure-devops-enterprise-pipeline"
+    managed_by = "terraform"
+    purpose    = "portfolio"
   }
 }
