@@ -64,6 +64,7 @@ variable "budget_amount" {
 variable "alert_email" {
   description = "Email address to receive budget alerts"
   type        = string
+  default     = "mrnelsone@gmail.com"
 }
 
 variable "tags" {
