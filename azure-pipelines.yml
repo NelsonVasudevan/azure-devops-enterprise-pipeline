@@ -11,9 +11,17 @@
 #   - Service connection "azure-subscription-connection" (Service Principal,
 #     see terraform/main.tf comment for the az ad sp create-for-rbac command)
 #   - Service connection "dockerhub-connection" (Docker Hub username/PAT)
-#   - Variable group or secret variables: DOCKERHUB_NAMESPACE
 #   - Environment "aks-production" with a manual approval check, so
 #     terraform apply never runs unattended against your subscription
+#
+# Note: Docker Hub namespace and the budget alert email are hardcoded below
+# (imageRepository variable, terraform/variables.tf's alert_email default)
+# rather than passed as Azure DevOps pipeline variables - macro substitution
+# for pipeline variables proved unreliable in this project's environment,
+# silently leaving literal "$(VAR_NAME)" text in place instead of the
+# actual value. Hardcoding avoids that failure mode; edit these two spots
+# directly if you fork this repo under a different Docker Hub account or
+# want different alert emails.
 
 trigger:
   branches:
@@ -25,7 +33,7 @@ pool:
 
 variables:
   terraformWorkingDir: "$(System.DefaultWorkingDirectory)/terraform"
-  imageRepository: "$(DOCKERHUB_NAMESPACE)/adep-app"
+  imageRepository: "nelsondoc/adep-app"
   dockerfilePath: "$(System.DefaultWorkingDirectory)/app/Dockerfile"
   tag: "$(Build.BuildId)"
 
@@ -37,7 +45,6 @@ stages:
       - job: TerraformValidate
         displayName: "Terraform fmt & validate"
         steps:
-          - checkout: self 
           - task: TerraformInstaller@1
             inputs:
               terraformVersion: "1.7.5"
@@ -57,11 +64,10 @@ stages:
       - job: TerraformPlan
         displayName: "terraform plan"
         steps:
-          - checkout: self 
           - task: TerraformInstaller@1
             inputs:
               terraformVersion: "1.7.5"
-       
+
           - task: AzureCLI@2
             displayName: "terraform init & plan"
             inputs:
@@ -75,16 +81,14 @@ stages:
                 export ARM_TENANT_ID=$tenantId
                 export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
                 export ARM_USE_CLI=false
-
                 cd $(terraformWorkingDir)
-
-                terraform init -reconfigure
+                terraform init \
+                  -backend-config="client_id=$ARM_CLIENT_ID" \
+                  -backend-config="client_secret=$ARM_CLIENT_SECRET" \
+                  -backend-config="tenant_id=$ARM_TENANT_ID" \
+                  -backend-config="subscription_id=$ARM_SUBSCRIPTION_ID"
                 terraform plan -out=tfplan \
-                  -var="subscription_id=$ARM_SUBSCRIPTION_ID" \
-                  -var="alert_email=$ALERT_EMAIL"
-
-            env:
-              ALERT_EMAIL: $(ALERT_EMAIL)
+                  -var="subscription_id=$ARM_SUBSCRIPTION_ID"
 
           - publish: $(terraformWorkingDir)/tfplan
             artifact: tfplan
@@ -101,16 +105,12 @@ stages:
           runOnce:
             deploy:
               steps:
-                - checkout: self
                 - task: TerraformInstaller@1
                   inputs:
                     terraformVersion: "1.7.5"
 
                 - download: current
                   artifact: tfplan
-
-                - script: ls -R $(System.DefaultWorkingDirectory)
-                  displayName: "Debug repo structure"
 
                 - task: AzureCLI@2
                   displayName: "terraform init & apply"
@@ -126,7 +126,11 @@ stages:
                       export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
                       export ARM_USE_CLI=false
                       cd $(terraformWorkingDir)
-                      terraform init -reconfigure
+                      terraform init \
+                        -backend-config="client_id=$ARM_CLIENT_ID" \
+                        -backend-config="client_secret=$ARM_CLIENT_SECRET" \
+                        -backend-config="tenant_id=$ARM_TENANT_ID" \
+                        -backend-config="subscription_id=$ARM_SUBSCRIPTION_ID"
                       terraform apply -auto-approve $(Pipeline.Workspace)/tfplan/tfplan
 
   # ---------------------------------------------------------------
@@ -137,7 +141,6 @@ stages:
       - job: DockerBuildPush
         displayName: "docker build & push to Docker Hub"
         steps:
-          - checkout: self
           - task: Docker@2
             displayName: "Build and push"
             inputs:
@@ -145,6 +148,7 @@ stages:
               repository: $(imageRepository)
               command: buildAndPush
               Dockerfile: $(dockerfilePath)
+              arguments: "--platform linux/amd64"
               tags: |
                 $(tag)
                 latest
@@ -161,7 +165,6 @@ stages:
           runOnce:
             deploy:
               steps:
-                - checkout: self
                 - task: AzureCLI@2
                   displayName: "Get AKS credentials"
                   inputs:
